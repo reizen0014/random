@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>ランダムワード</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f2f4f8; --surface: #ffffff; --text: #1b2036; --muted: #6b7290; --a1: #e2495f; --a2: #1c8fa8;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #14172a; --surface: #1f2340; --text: #edeff8; --muted: #9aa1c4; --a1: #ff7a8d; --a2: #4cc3db; }
+}
+:root[data-theme="dark"] { --bg: #14172a; --surface: #1f2340; --text: #edeff8; --muted: #9aa1c4; --a1: #ff7a8d; --a2: #4cc3db; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif;
+  font-weight: 500; line-height: 1.6;
+}
+main { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
+h1 { font-size: 18px; font-weight: 900; margin: 4px 0 16px; letter-spacing: .02em; }
+.reels { display: grid; gap: 10px; }
+.reel {
+  background: var(--surface); border: 2px solid var(--c); border-radius: 18px;
+  height: 132px; display: flex; flex-direction: column; overflow: hidden; padding: 8px 14px 12px;
+}
+.reel:nth-child(1) { --c: var(--a1); }
+.reel:nth-child(2) { --c: var(--a2); }
+.reel .tag { font-size: 12px; color: var(--c); font-weight: 700; line-height: 1.4; }
+.reel .word {
+  font-size: clamp(26px, 8vw, 38px); font-weight: 900; text-align: center;
+  word-break: keep-all; overflow-wrap: anywhere; line-height: 1.2;
+  flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+}
+.reel.spinning .word { animation: tick .09s linear infinite; opacity: .75; }
+.reel.landed .word { animation: land .35s cubic-bezier(.2,1.4,.4,1); }
+@keyframes tick { from { transform: translateY(-14px); } to { transform: translateY(14px); } }
+@keyframes land { from { transform: translateY(-22px); opacity: 0; } to { transform: none; opacity: 1; } }
+.spin {
+  display: block; width: 100%; margin: 14px 0 0; padding: 18px; border: 0; border-radius: 18px;
+  background: var(--text); color: var(--bg); font: inherit; font-size: 20px; font-weight: 900;
+  letter-spacing: .08em; cursor: pointer;
+}
+.spin:active { transform: scale(.98); }
+.spin:disabled { opacity: .5; cursor: default; }
+#err { margin-top: 12px; color: var(--muted); font-size: 14px; }
+button:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .reel.spinning .word, .reel.landed .word { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>ランダムワード</h1>
+  <div class="reels" id="reels"></div>
+  <button class="spin" id="spin" disabled>まわす</button>
+  <div id="err" role="status"></div>
+</main>
+<script>
+(function () {
+  var NAMES = ["スロット1", "スロット2"];
+  var SLOTS = null;
+  var spinning = false;
+  var reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var reelsEl = document.getElementById("reels");
+  var spinBtn = document.getElementById("spin");
+  var errEl = document.getElementById("err");
+  var reelEls = [], wordEls = [];
+
+  NAMES.forEach(function (n) {
+    var r = document.createElement("div"); r.className = "reel";
+    var t = document.createElement("span"); t.className = "tag"; t.textContent = n;
+    var w = document.createElement("div"); w.className = "word"; w.textContent = "?";
+    r.appendChild(t); r.appendChild(w); reelsEl.appendChild(r);
+    reelEls.push(r); wordEls.push(w);
+  });
+
+  function pick(i, avoid) {
+    var list = SLOTS[i];
+    if (list.length === 1) return list[0];
+    var w;
+    do { w = list[Math.floor(Math.random() * list.length)]; } while (w === avoid);
+    return w;
+  }
+
+  function spin() {
+    if (spinning || !SLOTS) return;
+    spinning = true; spinBtn.disabled = true;
+    var stopAt = [900, 1500];
+    SLOTS.forEach(function (list, i) {
+      var r = reelEls[i], w = wordEls[i];
+      r.classList.remove("landed");
+      var final = pick(i, w.textContent);
+      if (reduced) { w.textContent = final; return; }
+      r.classList.add("spinning");
+      var timer = setInterval(function () { w.textContent = pick(i); }, 70);
+      setTimeout(function () {
+        clearInterval(timer); r.classList.remove("spinning");
+        w.textContent = final; void r.offsetWidth; r.classList.add("landed");
+      }, stopAt[i]);
+    });
+    setTimeout(function () { spinning = false; spinBtn.disabled = false; }, reduced ? 0 : stopAt[1] + 50);
+  }
+  spinBtn.addEventListener("click", spin);
+
+  fetch("words.json", { cache: "no-cache" })
+    .then(function (res) {
+      if (!res.ok) throw new Error("http " + res.status);
+      return res.json();
+    })
+    .then(function (data) {
+      var slots = NAMES.map(function (n) {
+        var arr = data[n];
+        if (!Array.isArray(arr)) throw new Error("bad format");
+        arr = arr.filter(function (v) { return typeof v === "string" && v.trim(); });
+        if (!arr.length) throw new Error("empty slot");
+        return arr;
+      });
+      SLOTS = slots;
+      spinBtn.disabled = false;
+    })
+    .catch(function () {
+      errEl.textContent = "言葉を読み込めませんでした。words.json の形式と置き場所を確認してください。";
+    });
+})();
+</script>
+</body>
+</html>
